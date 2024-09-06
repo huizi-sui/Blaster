@@ -3,10 +3,13 @@
 
 #include "Character/BlasterCharacter.h"
 
+#include "BlasterComponents/CombatComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/WidgetComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Net/UnrealNetwork.h"
+#include "Weapon/Weapon.h"
 
 
 ABlasterCharacter::ABlasterCharacter()
@@ -31,12 +34,20 @@ ABlasterCharacter::ABlasterCharacter()
 
 	OverheadWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("OverheadWidget"));
 	OverheadWidget->SetupAttachment(RootComponent);
-	
+
+	Combat = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
+	// 对于ActorComponent来说，不需要在GetLifetimeReplicatedProps中注册，只需要设置为可复制。
+	Combat->SetIsReplicated(true);
 }
 
 void ABlasterCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+}
+
+void ABlasterCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
 }
 
 void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -50,6 +61,24 @@ void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAxis(FName(TEXT("MoveRight")), this, &ThisClass::MoveRight);
 	PlayerInputComponent->BindAxis(FName(TEXT("Turn")), this, &ThisClass::Turn);
 	PlayerInputComponent->BindAxis(FName(TEXT("Lookup")), this, &ABlasterCharacter::LookUp);
+
+	PlayerInputComponent->BindAction(FName(TEXT("Equip")), IE_Pressed, this, &ThisClass::EquipButtonPressed);
+}
+
+void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME_CONDITION(ABlasterCharacter, OverlappingWeapon, COND_OwnerOnly);
+}
+
+void ABlasterCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	if (Combat)
+	{
+		Combat->Character = this;
+	}
 }
 
 void ABlasterCharacter::MoveForward(float Value)
@@ -88,10 +117,41 @@ void ABlasterCharacter::LookUp(float Value)
 	AddControllerPitchInput(Value);
 }
 
-void ABlasterCharacter::Tick(float DeltaTime)
+void ABlasterCharacter::EquipButtonPressed()
 {
-	Super::Tick(DeltaTime);
+	// 装备武器之类的事情应该由服务器完成，服务器有权限，它应该负责
+	if (Combat && HasAuthority())
+	{
+		Combat->EquipWeapon(OverlappingWeapon);
+	}
 }
 
+void ABlasterCharacter::OnRep_OverlappingWeapon(const AWeapon* LastWeapon)
+{
+	if (OverlappingWeapon)
+	{
+		OverlappingWeapon->ShowPickupWidget(true);
+	}
+	if (LastWeapon)
+	{
+		LastWeapon->ShowPickupWidget(false);
+	}
+}
 
+void ABlasterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
+{
+	if (OverlappingWeapon)
+	{
+		OverlappingWeapon->ShowPickupWidget(false);
+	}
+	// 这是发生在Server，如果该Pawn由Server操控，则显示Pickup Widget
+	OverlappingWeapon = Weapon;
+	if (IsLocallyControlled())
+	{
+		if (OverlappingWeapon)
+		{
+			OverlappingWeapon->ShowPickupWidget(true);
+		}
+	}
+}
 
