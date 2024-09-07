@@ -38,6 +38,9 @@ ABlasterCharacter::ABlasterCharacter()
 	Combat = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
 	// 对于ActorComponent来说，不需要在GetLifetimeReplicatedProps中注册，只需要设置为可复制。
 	Combat->SetIsReplicated(true);
+
+	// 允许玩家下蹲
+	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
 }
 
 void ABlasterCharacter::BeginPlay()
@@ -63,6 +66,7 @@ void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAxis(FName(TEXT("Lookup")), this, &ABlasterCharacter::LookUp);
 
 	PlayerInputComponent->BindAction(FName(TEXT("Equip")), IE_Pressed, this, &ThisClass::EquipButtonPressed);
+	PlayerInputComponent->BindAction(FName(TEXT("Crouch")), IE_Pressed, this, &ThisClass::CrouchButtonPressed);
 }
 
 void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -120,12 +124,42 @@ void ABlasterCharacter::LookUp(float Value)
 void ABlasterCharacter::EquipButtonPressed()
 {
 	// 装备武器之类的事情应该由服务器完成，服务器有权限，它应该负责
-	if (Combat && HasAuthority())
+	if (Combat)
+	{
+		// ServerEquipButtonPressed();
+		// 如果是服务器直接装备武器，如果是客户端，则通过RPC通知服务器装备武器
+		if (HasAuthority())
+		{
+			Combat->EquipWeapon(OverlappingWeapon);
+		}
+		else
+		{
+			ServerEquipButtonPressed();
+		}
+	}
+}
+
+void ABlasterCharacter::CrouchButtonPressed()
+{
+	if (bIsCrouched)
+	{
+		UnCrouch();
+	}
+	else
+	{
+		Crouch();
+	}
+}
+
+void ABlasterCharacter::ServerEquipButtonPressed_Implementation()
+{
+	if (Combat)
 	{
 		Combat->EquipWeapon(OverlappingWeapon);
 	}
 }
 
+// 仅仅发生在客户端
 void ABlasterCharacter::OnRep_OverlappingWeapon(const AWeapon* LastWeapon)
 {
 	if (OverlappingWeapon)
@@ -137,12 +171,15 @@ void ABlasterCharacter::OnRep_OverlappingWeapon(const AWeapon* LastWeapon)
 		LastWeapon->ShowPickupWidget(false);
 	}
 }
-
+// 仅仅发生在服务器端
 void ABlasterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
 {
-	if (OverlappingWeapon)
+	if (IsLocallyControlled())
 	{
-		OverlappingWeapon->ShowPickupWidget(false);
+		if (OverlappingWeapon)
+		{
+			OverlappingWeapon->ShowPickupWidget(false);
+		}
 	}
 	// 这是发生在Server，如果该Pawn由Server操控，则显示Pickup Widget
 	OverlappingWeapon = Weapon;
@@ -153,5 +190,10 @@ void ABlasterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
 			OverlappingWeapon->ShowPickupWidget(true);
 		}
 	}
+}
+
+bool ABlasterCharacter::IsWeaponEquipped() const
+{
+	return Combat && Combat->EquippedWeapon;
 }
 

@@ -18,6 +18,8 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	// 角色和武器组件结合非常紧密。
 	// 使角色类成为该组件的友元类，所以角色将可以完全访问该组件的所有变量和函数
 	friend class ABlasterCharacter;
@@ -29,8 +31,10 @@ protected:
 
 private:
 
-	class ABlasterCharacter* Character;
-	AWeapon* EquippedWeapon;
+	class ABlasterCharacter* Character = nullptr;
+
+	UPROPERTY(Replicated)
+	AWeapon* EquippedWeapon = nullptr;
 	
 
 public:	

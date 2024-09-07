@@ -33,6 +33,7 @@ protected:
 	void Turn(float Value);
 	void LookUp(float Value);
 	void EquipButtonPressed();
+	void CrouchButtonPressed();
 
 private:
 
@@ -53,9 +54,17 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	class UCombatComponent* Combat;
+
+	// Reliable保证数据到达，而UnReliable可能会导致RPC丢失
+	// 信息以数据包的形式发送， 数据包是通过网络发送的信息单元
+	// 如果是Reliable，客户端将在服务器收到RPC时收到确认，如果它不发送确认，RPC将再次发送
+	UFUNCTION(Server, Reliable)
+	void ServerEquipButtonPressed();
 	
 public:
 
 	void SetOverlappingWeapon(AWeapon* Weapon);
+
+	bool IsWeaponEquipped() const;
 	
 };
