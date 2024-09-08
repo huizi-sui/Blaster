@@ -29,13 +29,29 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	void SetAiming(bool bIsAiming);
+
+	UFUNCTION(Server, Reliable)
+	void ServerSetAiming(bool bIsAiming);
+
+	UFUNCTION()
+	void OnRep_EquippedWeapon();
+
 private:
 
 	class ABlasterCharacter* Character = nullptr;
 
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing=OnRep_EquippedWeapon)
 	AWeapon* EquippedWeapon = nullptr;
+
+	UPROPERTY(Replicated)
+	bool bAiming = false;
+
+	UPROPERTY(EditAnywhere)
+	float BaseWalkSpeed;
 	
+	UPROPERTY(EditAnywhere)
+	float AimWalkSpeed;
 
 public:	
 

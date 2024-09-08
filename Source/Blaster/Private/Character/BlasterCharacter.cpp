@@ -5,9 +5,11 @@
 
 #include "BlasterComponents/CombatComponent.h"
 #include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/WidgetComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 #include "Weapon/Weapon.h"
 
@@ -41,6 +43,9 @@ ABlasterCharacter::ABlasterCharacter()
 
 	// 允许玩家下蹲
 	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
+
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 }
 
 void ABlasterCharacter::BeginPlay()
@@ -51,6 +56,8 @@ void ABlasterCharacter::BeginPlay()
 void ABlasterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	AimOffset(DeltaTime);
 }
 
 void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -67,6 +74,8 @@ void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 	PlayerInputComponent->BindAction(FName(TEXT("Equip")), IE_Pressed, this, &ThisClass::EquipButtonPressed);
 	PlayerInputComponent->BindAction(FName(TEXT("Crouch")), IE_Pressed, this, &ThisClass::CrouchButtonPressed);
+	PlayerInputComponent->BindAction(FName(TEXT("Aim")), IE_Pressed, this, &ThisClass::AimButtonPressed);
+	PlayerInputComponent->BindAction(FName(TEXT("Aim")), IE_Released, this, &ThisClass::AimButtonReleased);
 }
 
 void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -151,6 +160,61 @@ void ABlasterCharacter::CrouchButtonPressed()
 	}
 }
 
+void ABlasterCharacter::AimButtonPressed()
+{
+	if (Combat)
+	{
+		Combat->SetAiming(true);
+	}
+}
+
+void ABlasterCharacter::AimButtonReleased()
+{
+	if (Combat)
+	{
+		Combat->SetAiming(false);
+	}
+}
+
+void ABlasterCharacter::AimOffset(float DeltaTime)
+{
+	// 仅在装备武器时，使用瞄准偏移
+	if (Combat && Combat->EquippedWeapon == nullptr) return;
+	
+	FVector Velocity = GetVelocity();
+	Velocity.Z = 0;
+	float Speed = Velocity.Size();
+	bool bIsAir = GetCharacterMovement()->IsFalling();
+
+	// standing still, not jumping
+	if (Speed == 0.f && !bIsAir)
+	{
+		const FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		// 计算偏移量
+		const FRotator DeltaAimRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
+		AO_Yaw = DeltaAimRotation.Yaw;
+		bUseControllerRotationYaw = false;
+	}
+	// running or jumping
+	if (Speed || bIsAir)
+	{
+		// 设置起始目标旋转变量
+		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		AO_Yaw = 0.f;
+		bUseControllerRotationYaw = true;
+	}
+	// 在客户端向下看，Pitch < 0，但是在对应的Server中的Pawn上，Pitch是270-360之间
+	// 这是因为Pitch数据在网络传递时（从客户端到传递到服务器端），压缩为无符号数
+	AO_Pitch = GetBaseAimRotation().Pitch;
+	if (AO_Pitch > 90.f && !IsLocallyControlled())
+	{
+		// map pitch from [270, 360) to [-90, 0)
+		const FVector2D InRange(270.f, 360.f);
+		const FVector2D OutRange(-90.f, 0.f);
+		AO_Pitch = FMath::GetMappedRangeValueClamped(InRange, OutRange, AO_Pitch);
+	}
+}
+
 void ABlasterCharacter::ServerEquipButtonPressed_Implementation()
 {
 	if (Combat)
@@ -195,5 +259,10 @@ void ABlasterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
 bool ABlasterCharacter::IsWeaponEquipped() const
 {
 	return Combat && Combat->EquippedWeapon;
+}
+
+bool ABlasterCharacter::IsAiming() const
+{
+	return Combat && Combat->bAiming;
 }
 

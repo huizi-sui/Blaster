@@ -34,6 +34,9 @@ protected:
 	void LookUp(float Value);
 	void EquipButtonPressed();
 	void CrouchButtonPressed();
+	void AimButtonPressed();
+	void AimButtonReleased();
+	void AimOffset(float DeltaTime);
 
 private:
 
@@ -60,11 +63,18 @@ private:
 	// 如果是Reliable，客户端将在服务器收到RPC时收到确认，如果它不发送确认，RPC将再次发送
 	UFUNCTION(Server, Reliable)
 	void ServerEquipButtonPressed();
+
+	float AO_Yaw;
+	float AO_Pitch;
+	FRotator StartingAimRotation;
 	
 public:
 
 	void SetOverlappingWeapon(AWeapon* Weapon);
 
 	bool IsWeaponEquipped() const;
-	
+	bool IsAiming() const;
+
+	FORCEINLINE float GetAO_Yaw() const { return AO_Yaw; }
+	FORCEINLINE float GetAO_Pitch() const { return AO_Pitch; }
 };
