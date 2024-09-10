@@ -4,6 +4,7 @@
 #include "Character/BlasterAnimInstance.h"
 
 #include "Character/BlasterCharacter.h"
+#include "Weapon/Weapon.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 
@@ -31,8 +32,10 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	bIsInAir = BlasterCharacter->GetCharacterMovement()->IsFalling();
 	bIsAccelerating = BlasterCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0.f;
 	bWeaponEquipped = BlasterCharacter->IsWeaponEquipped();
+	EquippedWeapon = BlasterCharacter->GetWeapon();
 	bIsCrouched = BlasterCharacter->bIsCrouched;
 	bAiming = BlasterCharacter->IsAiming();
+	TurningInPlace = BlasterCharacter->GetTurningInPlace();
 
 	// 获得偏移量，Offset Yaw for Strafing
 	// 基本目标旋转
@@ -56,4 +59,19 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	AO_Yaw = BlasterCharacter->GetAO_Yaw();
 	AO_Pitch = BlasterCharacter->GetAO_Pitch();
+
+	if (bWeaponEquipped && EquippedWeapon && EquippedWeapon->GetWeaponMesh() && BlasterCharacter->GetMesh())
+	{
+		// 从装备的武器上的插槽获取插槽变换，在世界空间坐标系下
+		LeftHandTransform = EquippedWeapon->GetWeaponMesh()->GetSocketTransform(FName(TEXT("LeftHandSocket")), RTS_World);
+		// 将其转换为骨骼上的骨骼空间
+		// 右手拿武器，位置不变，以它为根，获取武器插槽相对于右手的位置
+		FVector OutPosition;
+		FRotator OutRotation;
+		BlasterCharacter->GetMesh()->TransformToBoneSpace(FName(TEXT("hand_r")), LeftHandTransform.GetLocation(), FRotator::ZeroRotator, OutPosition, OutRotation);
+		// 将武器插槽相对于hand_r的位置信息(在骨骼空间下)记录在LeftHandTransform中
+		
+		LeftHandTransform.SetLocation(OutPosition);
+		LeftHandTransform.SetRotation(FQuat(OutRotation));
+	}
 }
