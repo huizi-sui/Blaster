@@ -28,6 +28,9 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	// 射击
+	virtual void Fire(const FVector& HitTarget);
+
 protected:
 
 	virtual void BeginPlay() override;
@@ -65,6 +68,13 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Weapon Properties")
 	class UWidgetComponent* PickupWidget;
+
+	// 武器射击时播放的动画资源
+	UPROPERTY(EditAnywhere, Category = "Weapon Properties")
+	class UAnimationAsset* FireAnimation;
+
+	UPROPERTY(EditDefaultsOnly)
+	TSubclassOf<class ACasing> CasingClass;
 
 public:
 

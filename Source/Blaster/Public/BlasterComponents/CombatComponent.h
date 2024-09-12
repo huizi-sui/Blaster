@@ -8,6 +8,8 @@
 
 class AWeapon;
 
+#define TRACE_LENGTH 80000.f
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class BLASTER_API UCombatComponent : public UActorComponent
 {
@@ -37,6 +39,18 @@ protected:
 	UFUNCTION()
 	void OnRep_EquippedWeapon();
 
+	void FireButtonPressed(bool bPressed);
+
+	// 使用FVector_NetQuantize代替FVector，丢失了信息，但是更有效的通过网络发送数据
+	// 有助于降低带宽
+	UFUNCTION(Server, Reliable)
+	void ServerFire(const FVector_NetQuantize& TraceHitTarget);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastFire(const FVector_NetQuantize& TraceHitTarget);
+
+	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
+
 private:
 
 	class ABlasterCharacter* Character = nullptr;
@@ -53,6 +67,8 @@ private:
 	UPROPERTY(EditAnywhere)
 	float AimWalkSpeed;
 
+	bool bFireButtonPressed;
+	
 public:	
 
 };
