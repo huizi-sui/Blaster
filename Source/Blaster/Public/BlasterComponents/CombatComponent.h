@@ -6,6 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "CombatComponent.generated.h"
 
+class ABlasterHUD;
+class ABlasterPlayerController;
 class AWeapon;
 
 #define TRACE_LENGTH 80000.f
@@ -51,6 +53,8 @@ protected:
 
 	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
 
+	void SetHUDCrosshairs(float DeltaTime);
+
 private:
 
 	class ABlasterCharacter* Character = nullptr;
@@ -68,6 +72,36 @@ private:
 	float AimWalkSpeed;
 
 	bool bFireButtonPressed;
+
+	ABlasterPlayerController* Controller;
+	ABlasterHUD* HUD;
+
+	/**
+	 * HUD and crosshairs
+	 */
+	float CrosshairVelocityFactor;
+	float CrosshairInAirFactor;
+	float CrosshairAimFactor;
+	float CrosshairShootingFactor;
+
+	FVector HitTarget;
+
+	/**
+	 * Aiming and FOV
+	 */
+	
+	// Field of view when not aiming, set to the camera's base FOV in BeginPlay
+	float DefaultFOV;
+
+	UPROPERTY(EditDefaultsOnly, Category = Combat)
+	float ZoomedFOV = 30.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = Combat)
+	float ZoomedInterpSpeed = 20.f;
+
+	float CurrentFOV;
+
+	void InterpFOV(float DeltaTime);
 	
 public:	
 

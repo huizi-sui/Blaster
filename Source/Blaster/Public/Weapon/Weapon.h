@@ -31,6 +31,29 @@ public:
 	// 射击
 	virtual void Fire(const FVector& HitTarget);
 
+	/**
+	 * Textures for the weapon crosshairs
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = Crosshairs)
+	UTexture2D* CrosshairsCenter;
+	UPROPERTY(EditDefaultsOnly, Category = Crosshairs)
+	UTexture2D* CrosshairsLeft;
+	UPROPERTY(EditDefaultsOnly, Category = Crosshairs)
+	UTexture2D* CrosshairsTop;
+	UPROPERTY(EditDefaultsOnly, Category = Crosshairs)
+	UTexture2D* CrosshairsRight;
+	UPROPERTY(EditDefaultsOnly, Category = Crosshairs)
+	UTexture2D* CrosshairsBottom;
+
+	/**
+	 * Zoomed FOV while aiming
+	 */
+	UPROPERTY(EditAnywhere)
+	float ZoomedFOV = 30.f;
+
+	UPROPERTY(EditDefaultsOnly)
+	float ZoomInterpSpeed = 20.f;
+
 protected:
 
 	virtual void BeginPlay() override;
@@ -83,4 +106,7 @@ public:
 	FORCEINLINE USphereComponent* GetAreaSphere() const { return AreaSphere; }
 
 	FORCEINLINE USkeletalMeshComponent* GetWeaponMesh() const { return WeaponMesh; }
+
+	FORCEINLINE float GetZoomedFOV() const { return ZoomedFOV; }
+	FORCEINLINE float GetZoomInterpSpeed() const { return ZoomInterpSpeed; }
 };

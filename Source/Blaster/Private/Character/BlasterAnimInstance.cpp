@@ -70,8 +70,17 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		FRotator OutRotation;
 		BlasterCharacter->GetMesh()->TransformToBoneSpace(FName(TEXT("hand_r")), LeftHandTransform.GetLocation(), FRotator::ZeroRotator, OutPosition, OutRotation);
 		// 将武器插槽相对于hand_r的位置信息(在骨骼空间下)记录在LeftHandTransform中
-		
 		LeftHandTransform.SetLocation(OutPosition);
 		LeftHandTransform.SetRotation(FQuat(OutRotation));
+
+		// 由于AttachActor函数，使得EquippedWeapon的骨骼与角色骨骼有了关联
+		// 右手虽然拿武器的位置对了，但是旋转不对，所以需要对右手骨骼进行旋转
+		// 只需要本地玩家调整就行，因为本地玩家的视口中枪口方向和目标方向差距最大，在其他玩家视口中，并不关心该玩家的该信息，所以不必浪费带宽做属性复制
+		if (BlasterCharacter->IsLocallyControlled())
+		{
+			bLocallyControlled = true;
+			const FTransform RightHandTransform = EquippedWeapon->GetWeaponMesh()->GetSocketTransform(FName("hand_r"), RTS_World);
+			RightHandRotation = UKismetMathLibrary::FindLookAtRotation(RightHandTransform.GetLocation(), RightHandTransform.GetLocation() + (RightHandTransform.GetLocation() - BlasterCharacter->GetHitTarget()));
+		}
 	}
 }
