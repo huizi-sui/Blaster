@@ -4,9 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "HUD/BlasterHUD.h"
 #include "CombatComponent.generated.h"
 
-class ABlasterHUD;
 class ABlasterPlayerController;
 class AWeapon;
 
@@ -40,6 +40,7 @@ protected:
 
 	UFUNCTION()
 	void OnRep_EquippedWeapon();
+	void Fire();
 
 	void FireButtonPressed(bool bPressed);
 
@@ -57,7 +58,7 @@ protected:
 
 private:
 
-	class ABlasterCharacter* Character = nullptr;
+	ABlasterCharacter* Character = nullptr;
 
 	UPROPERTY(ReplicatedUsing=OnRep_EquippedWeapon)
 	AWeapon* EquippedWeapon = nullptr;
@@ -86,6 +87,8 @@ private:
 
 	FVector HitTarget;
 
+	FHUDPackage Package;
+
 	/**
 	 * Aiming and FOV
 	 */
@@ -102,6 +105,16 @@ private:
 	float CurrentFOV;
 
 	void InterpFOV(float DeltaTime);
+
+	/**
+	 * Automatic fire
+	 */
+	FTimerHandle FireTimer;
+	
+	bool bCanFire = true;
+
+	void StartFireTimer();
+	void FireTimerFinished();
 	
 public:	
 

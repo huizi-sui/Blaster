@@ -16,6 +16,7 @@ struct FHUDPackage
 	UTexture2D* CrosshairsRight = nullptr;
 	// 十字准线应该如何缩放，例如跑步射击时，准线会分散
 	float CrosshairSpread;
+	FLinearColor CrosshairsColor;
 };
 
 /**
@@ -34,7 +35,7 @@ public:
 private:
 	FHUDPackage HUDPackage;
 
-	void DrawCrosshair(UTexture2D* Texture, FVector2D ViewportCenter, FVector2D Spread);
+	void DrawCrosshair(UTexture2D* Texture, FVector2D ViewportCenter, FVector2D Spread, FLinearColor CrosshairsColor);
 
 	UPROPERTY(EditDefaultsOnly)
 	float CrosshairSpreadMax = 16.f;

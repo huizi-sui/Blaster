@@ -5,11 +5,12 @@
 #include "CoreMinimal.h"
 #include "BlasterTypes/TurningInPlace.h"
 #include "GameFramework/Character.h"
+#include "Interfaces/InteractWithCrosshairsInterface.h"
 #include "Weapon/Weapon.h"
 #include "BlasterCharacter.generated.h"
 
 UCLASS()
-class BLASTER_API ABlasterCharacter : public ACharacter
+class BLASTER_API ABlasterCharacter : public ACharacter, public IInteractWithCrosshairsInterface
 {
 	GENERATED_BODY()
 
@@ -27,6 +28,11 @@ public:
 
 	void PlayFireMontage(bool bAiming) const;
 
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastHit();
+
+	virtual void OnRep_ReplicatedMovement() override;
+
 protected:
 
 	virtual void BeginPlay() override;
@@ -39,10 +45,15 @@ protected:
 	void CrouchButtonPressed();
 	void AimButtonPressed();
 	void AimButtonReleased();
+	void CalculateAO_Pitch();
 	void AimOffset(float DeltaTime);
+	// 由于AimOffset，导致旋转根骨骼，所以在模拟代理端会出现抖动现象
+	void SimProxiesTurn();
 	void FireButtonPressed();
 	void FireButtonReleased();
 	virtual void Jump() override;
+
+	void PlayHitReactMontage();
 
 private:
 
@@ -79,7 +90,23 @@ private:
 	void TurnInPlace(float DeltaTime);
 
 	UPROPERTY(EditAnywhere, Category = Combat)
-	class UAnimMontage* FireWeaponMontage;
+	UAnimMontage* FireWeaponMontage;
+
+	UPROPERTY(EditAnywhere, Category = Combat)
+	UAnimMontage* HitReactMontage;
+	
+	void HideCameraIfCharacterClose();
+
+	UPROPERTY(EditDefaultsOnly)
+	float CameraThreshold = 200.f;
+
+	bool bRotateRootBone;
+	float TurnThreshold = 0.5f;
+	FRotator ProxyRotationLastFrame;
+	FRotator ProxyRotation;
+	float ProxyYaw;
+	float TimeSinceLastMovementReplication;
+	float CalculateSpeed() const;
 	
 public:
 
@@ -94,4 +121,5 @@ public:
 	FORCEINLINE ETurningInPlace GetTurningInPlace() const { return TurningInPlace; }
 	FVector GetHitTarget() const;
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+	FORCEINLINE bool ShouldRotateRootBone() const { return bRotateRootBone; }
 };

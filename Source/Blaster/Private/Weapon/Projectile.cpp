@@ -1,6 +1,8 @@
 
 #include "Weapon/Projectile.h"
 
+#include "Blaster/Blaster.h"
+#include "Character/BlasterCharacter.h"
 #include "Components/BoxComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -19,6 +21,9 @@ AProjectile::AProjectile()
 	CollisionBox->SetCollisionResponseToAllChannels(ECR_Ignore);
 	CollisionBox->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	CollisionBox->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+	// ECC_Pawn包括胶囊体，为了更准确的打中其他玩家，使用其他玩家的骨骼网格体，而不是他们的胶囊体
+	// 所以自定义了一个碰撞通道
+	CollisionBox->SetCollisionResponseToChannel(ECC_SkeletalMesh, ECR_Block);
 
 	ProjectileMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(FName("ProjectileMovementComponent"));
 	ProjectileMovementComponent->bRotationFollowsVelocity = true;
@@ -51,6 +56,12 @@ void AProjectile::BeginPlay()
 // 只在Server发生
 void AProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& HitResult)
 {
+	if (ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OtherActor))
+	{
+		// 角色被攻击后的动画，使用NetMulticast进行广播，在所有机器上播放
+		BlasterCharacter->MulticastHit();
+	}
+	
 	// 在Server销毁会通知到所有客户端，所有客户端都会销毁该Actor，所以Server和客户端可以在销毁该Actor前播放声音和产生粒子特效
 	Destroy();
 }

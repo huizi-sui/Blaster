@@ -12,7 +12,7 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 	// PostLogin是第一个可以安全访问刚刚加入的PlayerController的地方。
 	const int32 NumberOfPlayers = GameState->PlayerArray.Num();
 	// 如果玩家数量达到一定值，则服务器端将会带着所有客户端一起travel到一个新的Level
-	if (NumberOfPlayers == 4)
+	if (NumberOfPlayers == 2)
 	{
 		// GameMode仅仅存在于服务器上
 		if (UWorld* World = GetWorld())
