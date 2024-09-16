@@ -9,6 +9,8 @@
 #include "Weapon/Weapon.h"
 #include "BlasterCharacter.generated.h"
 
+class ABlasterPlayerController;
+
 UCLASS()
 class BLASTER_API ABlasterCharacter : public ACharacter, public IInteractWithCrosshairsInterface
 {
@@ -107,6 +109,20 @@ private:
 	float ProxyYaw;
 	float TimeSinceLastMovementReplication;
 	float CalculateSpeed() const;
+
+	/**
+	 * Player health
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Player Stats")
+	float MaxHealth = 100.f;
+
+	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_Health, Category = "Player Stats")
+	float Health = 100.f;
+
+	UFUNCTION()
+	void OnRep_Health();
+
+	ABlasterPlayerController* BlasterPlayerController;
 	
 public:
 

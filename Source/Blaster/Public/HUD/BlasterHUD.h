@@ -4,6 +4,8 @@
 #include "GameFramework/HUD.h"
 #include "BlasterHUD.generated.h"
 
+class UCharacterOverlay;
+
 USTRUCT(BlueprintType)
 struct FHUDPackage
 {
@@ -31,6 +33,16 @@ public:
 
 	// 该函数每帧被调用
 	virtual void DrawHUD() override;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Player Stats")
+	TSubclassOf<UCharacterOverlay> CharacterOverlayClass;
+	
+	UCharacterOverlay* CharacterOverlay;
+
+protected:
+	virtual void BeginPlay() override;
+
+	void AddCharacterOverlay();
 
 private:
 	FHUDPackage HUDPackage;
