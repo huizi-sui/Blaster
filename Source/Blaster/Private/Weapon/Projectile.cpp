@@ -56,13 +56,7 @@ void AProjectile::BeginPlay()
 // 只在Server发生
 void AProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& HitResult)
 {
-	if (ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OtherActor))
-	{
-		// 角色被攻击后的动画，使用NetMulticast进行广播，在所有机器上播放
-		BlasterCharacter->MulticastHit();
-	}
-	
-	// 在Server销毁会通知到所有客户端，所有客户端都会销毁该Actor，所以Server和客户端可以在销毁该Actor前播放声音和产生粒子特效
+	// 在Server销毁会通知到所有客户端，所有客户端都会销毁该Actor
 	Destroy();
 }
 

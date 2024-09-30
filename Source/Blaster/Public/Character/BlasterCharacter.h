@@ -4,11 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "BlasterTypes/TurningInPlace.h"
+#include "Components/TimelineComponent.h"
 #include "GameFramework/Character.h"
 #include "Interfaces/InteractWithCrosshairsInterface.h"
 #include "Weapon/Weapon.h"
 #include "BlasterCharacter.generated.h"
 
+class ABlasterPlayerState;
+class USoundCue;
 class ABlasterPlayerController;
 
 UCLASS()
@@ -29,11 +32,16 @@ public:
 	virtual void PostInitializeComponents() override;
 
 	void PlayFireMontage(bool bAiming) const;
-
-	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastHit();
-
+	void PlayElimMontage() const;
+	
 	virtual void OnRep_ReplicatedMovement() override;
+
+	// 这个仅仅在Server上调用
+	void Elim();
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastElim();
+
+	virtual void Destroyed() override;
 
 protected:
 
@@ -54,8 +62,16 @@ protected:
 	void FireButtonPressed();
 	void FireButtonReleased();
 	virtual void Jump() override;
-
+	
 	void PlayHitReactMontage();
+
+	UFUNCTION()
+	void ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser);
+
+	void UpdateHUDHealth();
+
+	// Poll for any relevant classes and initialize our HUD
+	void PollInit();
 
 private:
 
@@ -91,11 +107,14 @@ private:
 	ETurningInPlace TurningInPlace;
 	void TurnInPlace(float DeltaTime);
 
-	UPROPERTY(EditAnywhere, Category = Combat)
+	UPROPERTY(EditDefaultsOnly, Category = Combat)
 	UAnimMontage* FireWeaponMontage;
 
-	UPROPERTY(EditAnywhere, Category = Combat)
+	UPROPERTY(EditDefaultsOnly, Category = Combat)
 	UAnimMontage* HitReactMontage;
+
+	UPROPERTY(EditDefaultsOnly, Category = Combat)
+	UAnimMontage* ElimMontage;
 	
 	void HideCameraIfCharacterClose();
 
@@ -123,6 +142,54 @@ private:
 	void OnRep_Health();
 
 	ABlasterPlayerController* BlasterPlayerController;
+
+	bool bElimmed = false;
+
+	// 该计时器用于玩家重生
+	FTimerHandle ElimTimer;
+
+	UPROPERTY(EditDefaultsOnly)
+	float ElimDelay = 3.f;
+
+	void ElimTimerFinished();
+
+	/**
+	 * Dissolve effect
+	 */
+	// 这是在时间线中使用的轨道
+	FOnTimelineFloat DissolveTrack;
+
+	UPROPERTY(VisibleAnywhere)
+	UTimelineComponent* DissolveTimeline;
+
+	UPROPERTY(EditAnywhere)
+	UCurveFloat* DissolveCurve;
+
+	UFUNCTION()
+	void UpdateDissolveMaterial(float DissolveValue);
+	void StartDissolve();
+
+	// Dynamic instance that we can change at runtime
+	UPROPERTY(VisibleAnywhere, Category = Elim)
+	UMaterialInstanceDynamic* DynamicDissolveMaterialInstance;
+
+	// Material instance set on the Blueprint, used with the dynamic material instance
+	UPROPERTY(EditDefaultsOnly, Category = Elim)
+	UMaterialInstance* DissolveMaterialInstance;
+
+	/**
+	 * Elim bot
+	 */
+	UPROPERTY(EditDefaultsOnly)
+	UParticleSystem* ElimBotEffect;
+
+	UPROPERTY(VisibleAnywhere)
+	UParticleSystemComponent* ElimBotComponent;
+
+	UPROPERTY(EditDefaultsOnly)
+	USoundCue* ElimBotSound;
+
+	ABlasterPlayerState* BlasterPlayerState;
 	
 public:
 
@@ -138,4 +205,7 @@ public:
 	FVector GetHitTarget() const;
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	FORCEINLINE bool ShouldRotateRootBone() const { return bRotateRootBone; }
+	FORCEINLINE bool IsElimmed() const { return bElimmed; }
+	FORCEINLINE float GetHealth() const { return Health; }
+	FORCEINLINE float GetMaxHealth() const { return MaxHealth; }
 };

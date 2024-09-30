@@ -10,9 +10,14 @@
 #include "Components/WidgetComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "GameMode/BlasterGameMode.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
+#include "Particles/ParticleSystemComponent.h"
 #include "PlayerController/BlasterPlayerController.h"
+#include "PlayerState/BlasterPlayerState.h"
+#include "Sound/SoundCue.h"
 #include "Weapon/Weapon.h"
 
 
@@ -21,6 +26,7 @@ ABlasterCharacter::ABlasterCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 	NetUpdateFrequency = 66.f;
 	MinNetUpdateFrequency = 33.f;
+	SpawnCollisionHandlingMethod = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(GetMesh());
@@ -56,16 +62,29 @@ ABlasterCharacter::ABlasterCharacter()
 	GetMesh()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 
 	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+	NetUpdateFrequency = 66.f;
+	MinNetUpdateFrequency = 33.f;
+
+	DissolveTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DissolveTimelineComponent"));
+}
+
+void ABlasterCharacter::Destroyed()
+{
+	Super::Destroyed();
+	if (ElimBotComponent)
+	{
+		ElimBotComponent->DestroyComponent();
+	}
 }
 
 void ABlasterCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	BlasterPlayerController = Cast<ABlasterPlayerController>(Controller);
-	if (BlasterPlayerController)
+	UpdateHUDHealth();
+	if (HasAuthority())
 	{
-		BlasterPlayerController->SetHUDHealth(Health, MaxHealth);
+		OnTakeAnyDamage.AddDynamic(this, &ThisClass::ReceiveDamage);
 	}
 }
 
@@ -88,7 +107,7 @@ void ABlasterCharacter::Tick(float DeltaTime)
 		CalculateAO_Pitch();
 	}
 	HideCameraIfCharacterClose();
-	
+	PollInit();
 }
 
 void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -147,6 +166,15 @@ void ABlasterCharacter::PlayFireMontage(bool bAiming) const
 	}
 }
 
+void ABlasterCharacter::PlayElimMontage() const
+{
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance && ElimMontage)
+	{
+		AnimInstance->Montage_Play(ElimMontage);
+	}
+}
+
 void ABlasterCharacter::PlayHitReactMontage()
 {
 	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
@@ -155,14 +183,28 @@ void ABlasterCharacter::PlayHitReactMontage()
 	if (AnimInstance && HitReactMontage)
 	{
 		AnimInstance->Montage_Play(HitReactMontage);
-		FName SectionName("FromFront");
+		const FName SectionName("FromFront");
 		AnimInstance->Montage_JumpToSection(SectionName);
 	}
 }
 
-void ABlasterCharacter::MulticastHit_Implementation()
+void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser)
 {
+	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth);
+	// 只有服务器端调用该函数，在服务器端播放受到攻击的动画，然后属性复制后，在客户端的OnRep函数中调用播放动画。
+	UpdateHUDHealth();
 	PlayHitReactMontage();
+
+	if (Health == 0.f)
+	{
+		if (ABlasterGameMode* BlasterGameMode = GetWorld()->GetAuthGameMode<ABlasterGameMode>())
+		{
+			BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController;
+			ABlasterPlayerController* AttackerPlayerController = Cast<ABlasterPlayerController>(InstigatorController);
+			BlasterGameMode->PlayerEliminated(this, BlasterPlayerController, AttackerPlayerController);
+		}
+	}
+	
 }
 
 void ABlasterCharacter::MoveForward(float Value)
@@ -436,6 +478,114 @@ float ABlasterCharacter::CalculateSpeed() const
 
 void ABlasterCharacter::OnRep_Health()
 {
+	// 属性复制比RPC更快，更有效
+	UpdateHUDHealth();
+	PlayHitReactMontage();
+}
+
+void ABlasterCharacter::UpdateHUDHealth()
+{
+	BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController;
+	if (BlasterPlayerController)
+	{
+		BlasterPlayerController->SetHUDHealth(Health, MaxHealth);
+	}
+}
+
+void ABlasterCharacter::PollInit()
+{
+	if (BlasterPlayerState == nullptr)
+	{
+		// 在游戏开始第一帧时，这会返回nullptr，所以在Tick函数中轮询
+		BlasterPlayerState = GetPlayerState<ABlasterPlayerState>();
+		if (BlasterPlayerState)
+		{
+			// 更新HUD
+			BlasterPlayerState->AddToScore(0.f);
+		}
+	}
+}
+
+void ABlasterCharacter::Elim()
+{
+	if (Combat && Combat->EquippedWeapon)
+	{
+		Combat->EquippedWeapon->Dropped();
+	}
+	// GameMode中角色死亡需要调用该函数，而GameMode仅存在Server
+	MulticastElim();
+	// 启动定时器，当定时器结束时，调用回调函数
+	GetWorldTimerManager().SetTimer(ElimTimer, this, &ThisClass::ElimTimerFinished, ElimDelay);
+}
+
+void ABlasterCharacter::MulticastElim_Implementation()
+{
+	bElimmed = true;
+	PlayElimMontage();
+
+	// Start dissolve effect
+	if (DissolveMaterialInstance)
+	{
+		DynamicDissolveMaterialInstance = UMaterialInstanceDynamic::Create(DissolveMaterialInstance, this);
+		GetMesh()->SetMaterial(0, DynamicDissolveMaterialInstance);
+		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Dissolve"), 0.55f);
+		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Glow"), 200.f);
+	}
+	StartDissolve();
+
+	// Disable character movement
+	// DisableMovement()仅仅使得玩家不能移动，但是玩家可以通过鼠标旋转角色
+	GetCharacterMovement()->DisableMovement();
+	// 该函数可以禁止旋转
+	GetCharacterMovement()->StopMovementImmediately();
+	// 如果装备武器，禁止输入开火
+	if (BlasterPlayerController)
+	{
+		DisableInput(BlasterPlayerController);
+	}
+	// 禁用碰撞，可以禁止再次攻击已经死亡的角色触发定时器等
+	// Disable collision
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Spawn elim bot, 在NetMulticast中做，所以本地播放
+	if (ElimBotEffect)
+	{
+		// 在死亡玩家头顶200左右播放该效果
+		FVector ElimBotSpawnPoint(GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z + 200.0f);
+		ElimBotComponent = UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ElimBotEffect, ElimBotSpawnPoint, GetActorRotation());
+	}
+	if (ElimBotSound)
+	{
+		UGameplayStatics::SpawnSoundAtLocation(this, ElimBotSound, GetActorLocation());
+	}
+}
+
+void ABlasterCharacter::ElimTimerFinished()
+{
+	// 这只会在Server上调用, 定时器结束后调用该函数，重生玩家
+	if (ABlasterGameMode* BlasterGameMode = GetWorld()->GetAuthGameMode<ABlasterGameMode>())
+	{
+		BlasterGameMode->RequestRespawn(this, Controller);
+	}
+}
+
+void ABlasterCharacter::UpdateDissolveMaterial(float DissolveValue)
+{
+	if (DynamicDissolveMaterialInstance)
+	{
+		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Dissolve"), DissolveValue);
+	}
+}
+
+void ABlasterCharacter::StartDissolve()
+{
+	DissolveTrack.BindDynamic(this, &ThisClass::UpdateDissolveMaterial);
+	if (DissolveCurve && DissolveTimeline)
+	{
+		DissolveTimeline->AddInterpFloat(DissolveCurve, DissolveTrack);
+		DissolveTimeline->Play();
+	}
 }
 
 // 仅仅发生在服务器端

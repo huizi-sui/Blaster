@@ -69,7 +69,15 @@ void AWeapon::OnRep_WeaponState()
 	case EWeaponState::EWS_Equipped:
 		// 如果已经装备了，则不需要显示拾取Widget
 		ShowPickupWidget(false);
+		WeaponMesh->SetSimulatePhysics(false);
+		WeaponMesh->SetEnableGravity(false);
+		WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		break;
+	case EWeaponState::EWS_Dropped:
+		// 允许武器掉落到地面，模拟物理
+		WeaponMesh->SetSimulatePhysics(true);
+		WeaponMesh->SetEnableGravity(true);
+		WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	default:
 		break;
 	}
@@ -84,7 +92,19 @@ void AWeapon::SetWeaponState(EWeaponState State)
 	case EWeaponState::EWS_Equipped:
 		ShowPickupWidget(false);
 		AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		WeaponMesh->SetSimulatePhysics(false);
+		WeaponMesh->SetEnableGravity(false);
+		WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		break;
+	case EWeaponState::EWS_Dropped:
+		if (HasAuthority())
+		{
+			AreaSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		}
+		// 允许武器掉落到地面，模拟物理
+		WeaponMesh->SetSimulatePhysics(true);
+		WeaponMesh->SetEnableGravity(true);
+		WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	default:
 		break;
 	}
@@ -122,6 +142,14 @@ void AWeapon::Fire(const FVector& HitTarget)
 			}
 		}
 	}
+}
+
+void AWeapon::Dropped()
+{
+	SetWeaponState(EWeaponState::EWS_Dropped);
+	const FDetachmentTransformRules DetachRules(EDetachmentRule::KeepWorld, true);
+	WeaponMesh->DetachFromComponent(DetachRules);
+	SetOwner(nullptr);
 }
 
 

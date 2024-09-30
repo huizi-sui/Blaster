@@ -262,12 +262,15 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 {
 	if (Character == nullptr || WeaponToEquip == nullptr) return;
 
+	// 这里有两个属性传播，但是并不能保证其中哪一个会首先到达客户端。并不能假设先完成WeaponState的属性复制，然后Attach Actor
+	// 所以在服务器端，客户端都做这两个操作。
 	EquippedWeapon = WeaponToEquip;
 	// 这里需要做属性复制
 	EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
 	// 这里也是，信息会自动传播到客户端端
 	if (const USkeletalMeshSocket* HandSocket = Character->GetMesh()->GetSocketByName(FName(TEXT("RightHandSocket"))))
 	{
+		// 如果启用了物理，则AttachActor将不起作用
 		HandSocket->AttachActor(EquippedWeapon, Character->GetMesh());
 	}
 	// 设置武器的拥有者是Character，这里已经给做了属性复制
@@ -281,6 +284,11 @@ void UCombatComponent::OnRep_EquippedWeapon()
 {
 	if (EquippedWeapon && Character)
 	{
+		EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
+		if (const USkeletalMeshSocket* HandSocket = Character->GetMesh()->GetSocketByName(FName(TEXT("RightHandSocket"))))
+		{
+			HandSocket->AttachActor(EquippedWeapon, Character->GetMesh());
+		}
 		// 当拾取武器时，不再使用运动来控制视角，而是使用控制器的视角
 		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 		Character->bUseControllerRotationYaw = true;
